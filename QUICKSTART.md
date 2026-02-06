@@ -6,7 +6,7 @@ Get started with cl-cancel in 5 minutes.
 
 ```lisp
 ;; Using Quicklisp
-(ql:quickload :cl-cancel)
+(asdf:load-system :cl-cancel)
 
 ;; Or add to your .asd file
 :depends-on (#:cl-cancel ...)

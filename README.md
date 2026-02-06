@@ -28,7 +28,7 @@ Common Lisp already has dynamic variables (`let`, `*special*`) for request-scope
 
 ```lisp
 ;; Using Quicklisp or ASDF
-(ql:quickload :cl-cancel)
+(asdf:load-system :cl-cancel)
 
 ;; Dependencies: bordeaux-threads, atomics, precise-time
 ```
