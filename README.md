@@ -4,7 +4,7 @@ A focused cancellation propagation library for Common Lisp, providing deadlines,
 
 ## Overview
 
-`cl-cancel` provides Go-style cancellation semantics for Common Lisp applications, focusing purely on cancellation and leaving request-scoped data to Lisp's dynamic variables where they belong.
+`cl-cancel` provides hierarchical cancellation with deadlines and timeouts for Common Lisp applications. When a parent operation is cancelled, all child operations are automatically cancelled too.
 
 ## Key Features
 
@@ -17,12 +17,12 @@ A focused cancellation propagation library for Common Lisp, providing deadlines,
 
 ## Why cl-cancel?
 
-Common Lisp already has dynamic variables (`let`, `*special*`) for request-scoped data. What it lacks is:
+Common Lisp lacks native support for:
 1. **Cancellation propagation** - automatically cancelling child operations when parent is cancelled
-2. **Deadlines as first-class objects** - treating time limits as cancellation triggers
+2. **Deadline management** - treating time limits as cancellation triggers
 3. **Stream cancellation** - aborting blocked I/O immediately when cancelled
 
-`cl-cancel` provides these missing pieces without reinventing dynamic scoping.
+`cl-cancel` provides these essential concurrency primitives.
 
 ## Installation
 
