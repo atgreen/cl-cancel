@@ -64,7 +64,7 @@ Get started with cl-cancel in 5 minutes.
 
 ### 4. Request-Scoped Data
 
-Use dynamic variables (not context values):
+Use dynamic variables for request-scoped data:
 
 ```lisp
 ;; Define your request-scoped variables
@@ -250,9 +250,6 @@ Use dynamic variables (not context values):
    (defvar *request-id* nil)
    (let ((*request-id* "REQ-123"))
      (do-work))
-
-   ;; Don't do this - cl-cancel has no context values
-   ;; (let ((ctx (with-value ctx :request-id "REQ-123"))) ...)
    ```
 
 5. **Monitor I/O with streams**
@@ -282,10 +279,9 @@ cl-cancel provides:
 - **Hierarchical cancellation** - parent→child propagation
 - **Deadlines & timeouts** - time-based cancellation
 - **Stream integration** - immediate I/O abort
-- **Dynamic variables** - use `let` for request-scoped data
 
-It does NOT provide:
-- Context values (use dynamic variables instead)
-- Complex state management (use your own data structures)
+Use standard Lisp features for other needs:
+- **Request-scoped data** - use dynamic variables with `let`
+- **State management** - use your own data structures
 
 Happy cancelling!

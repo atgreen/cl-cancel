@@ -119,12 +119,12 @@ Instead of storing values in contexts, use Lisp's dynamic variables:
           msg))
 ```
 
-This is cleaner than context values because:
+Benefits of using dynamic variables:
 1. Standard Lisp feature (no learning curve)
 2. Better IDE support (navigation, completion)
 3. Type declarations work (`(declaim (type string *request-id*))`)
 4. Compiler optimization opportunities
-5. No lookup overhead (direct variable access)
+5. Direct variable access (no lookup overhead)
 
 ## Stream Cancellation for Immediate I/O Abort
 
