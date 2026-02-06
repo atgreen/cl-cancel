@@ -4,7 +4,7 @@ A focused cancellation propagation library for Common Lisp, providing deadlines,
 
 ## Overview
 
-`cl-cancel` provides Go-style cancellation semantics for Common Lisp applications. Unlike `cl-context`, this library focuses purely on cancellation, leaving request-scoped data to Lisp's dynamic variables where they belong.
+`cl-cancel` provides Go-style cancellation semantics for Common Lisp applications, focusing purely on cancellation and leaving request-scoped data to Lisp's dynamic variables where they belong.
 
 ## Key Features
 
@@ -255,18 +255,6 @@ When the context times out or is cancelled:
    - Use `wait-until-done` to block efficiently
    - Avoid tight loops checking `done-p`
 
-## Comparison with cl-context
-
-| Feature | cl-cancel | cl-context |
-|---------|-----------|------------|
-| Cancellation propagation | ✅ | ✅ |
-| Deadlines & timeouts | ✅ | ✅ |
-| Stream cancellation | ✅ | ✅ |
-| Context values | ❌ Use `let` | ✅ |
-| Learning curve | Low (uses standard Lisp) | Medium (new API) |
-| Memory overhead | Lower (no value storage) | Higher (hash tables per context) |
-| Type safety | Full (dynamic vars) | Limited (hash table lookup) |
-
 ## Performance Characteristics
 
 - **Cancellable creation**: O(1) with parent registration
@@ -291,8 +279,7 @@ All operations are thread-safe:
 
 ## Related Work
 
-- **Go's context package**: The inspiration for this library
-- **cl-context**: The parent library that includes value storage
+- **Go's context package**: The inspiration for this library's cancellation semantics
 - **bordeaux-threads**: Provides cross-implementation threading primitives
 
 ## License
