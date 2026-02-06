@@ -280,8 +280,4 @@ cl-cancel provides:
 - **Deadlines & timeouts** - time-based cancellation
 - **Stream integration** - immediate I/O abort
 
-Use standard Lisp features for other needs:
-- **Request-scoped data** - use dynamic variables with `let`
-- **State management** - use your own data structures
-
 Happy cancelling!
