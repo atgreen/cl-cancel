@@ -27,7 +27,7 @@ Common Lisp lacks native support for:
 ## Installation
 
 ```lisp
-;; Using Quicklisp or ASDF
+;; Load the system
 (asdf:load-system :cl-cancel)
 
 ;; Dependencies: bordeaux-threads, atomics, precise-time

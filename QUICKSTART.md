@@ -5,7 +5,6 @@ Get started with cl-cancel in 5 minutes.
 ## Installation
 
 ```lisp
-;; Using Quicklisp
 (asdf:load-system :cl-cancel)
 
 ;; Or add to your .asd file
