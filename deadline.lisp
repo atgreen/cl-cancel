@@ -9,7 +9,12 @@
 
 (defun get-current-time ()
   "Get current time as fractional seconds since epoch.
-   Returns a rational number with nanosecond precision."
+   Returns a rational number with nanosecond precision.
+
+   Offset it by a rational or an integer, such as (+ (get-current-time) 1/10).
+   Adding a float makes a float, and a single-float near today's universal
+   time (about 4e9) is only accurate to 256 seconds, so
+   (+ (get-current-time) 0.1) can name a time minutes away."
   (multiple-value-bind (universal-time nanoseconds)
       (org.shirakumo.precise-time:get-precise-time)
     (+ universal-time (/ nanoseconds 1000000000))))
@@ -300,9 +305,12 @@ guaranteed - use TYPEP/TYPECASE to check error types, not EQ for identity."
 DEADLINE-TIME (fractional seconds since epoch). If the parent's deadline is already earlier,
 with-deadline has no effect.
 
+DEADLINE-TIME may be any real; it is kept as the rational of equal value.
+
 Returns (values cancellable cancel-function)
 The cancel function is a lambda accepting an optional error parameter."
-  (let* ((parent-deadline (deadline parent))
+  (let* ((deadline-time (rational deadline-time))
+         (parent-deadline (deadline parent))
          (actual-deadline (if parent-deadline
                               (min deadline-time parent-deadline)
                               deadline-time)))
@@ -338,7 +346,9 @@ call cancel as soon as the operations running in this cancellable complete.
 
 Returns (values cancellable cancel-function)
 The cancel function is a lambda accepting an optional error parameter."
-  (with-deadline parent (+ (get-current-time) timeout-seconds)))
+  ;; RATIONAL first: a float added to the current time would make a float
+  ;; deadline, too coarse at that magnitude (see GET-CURRENT-TIME).
+  (with-deadline parent (+ (get-current-time) (rational timeout-seconds))))
 
 (defmacro with-deadline-context ((var deadline-time &optional (parent '*current-cancel-context*)) &body body)
   "Convenience macro to execute BODY with a deadline context.
