@@ -130,11 +130,40 @@
     (is (done-p ctx))
     (is (typep (err ctx) 'deadline-exceeded))))
 
+(test with-timeout-float-timeout-is-exact
+  "A float timeout gives a rational deadline exactly that far away.  Added to
+the current time as it was, a single-float timeout made a single-float
+deadline, accurate only to 256 seconds at that magnitude, and a double-float
+one could not be put in the timer's heap, whose entries hold rationals."
+  (dolist (timeout (list 0.1f0 0.1d0))
+    (let ((before (get-current-time)))
+      (multiple-value-bind (ctx cancel)
+          (with-timeout (background) timeout)
+        (unwind-protect
+             (let ((deadline (deadline ctx)))
+               (is (typep deadline 'rational))
+               (is (<= (+ before (rational timeout))
+                       deadline
+                       (+ (get-current-time) (rational timeout)))))
+          (funcall cancel))))))
+
 ;;; Deadline tests
+
+(test with-deadline-accepts-a-float
+  "A float deadline is kept as the rational of equal value."
+  (let ((deadline-time (float (+ (get-current-time) 10) 1d0)))
+    (multiple-value-bind (ctx cancel)
+        (with-deadline (background) deadline-time)
+      (unwind-protect
+           (progn
+             (is (= (rational deadline-time) (deadline ctx)))
+             (is (typep (deadline ctx) 'rational))
+             (is (not (done-p ctx))))
+        (funcall cancel)))))
 
 (test with-deadline-basic
   "Deadline cancels at specified time"
-  (let ((deadline-time (+ (get-current-time) 0.1)))
+  (let ((deadline-time (+ (get-current-time) 1/10)))
     (multiple-value-bind (ctx cancel)
         (with-deadline (background) deadline-time)
       (declare (ignore cancel))
@@ -146,8 +175,8 @@
 
 (test with-deadline-inherits-shorter-parent
   "Child inherits shorter deadline from parent"
-  (let ((parent-deadline (+ (get-current-time) 0.1))
-        (child-deadline (+ (get-current-time) 10.0)))
+  (let ((parent-deadline (+ (get-current-time) 1/10))
+        (child-deadline (+ (get-current-time) 10)))
     (multiple-value-bind (parent parent-cancel)
         (with-deadline (background) parent-deadline)
       (declare (ignore parent-cancel))
@@ -162,8 +191,8 @@
 
 (test with-deadline-uses-shorter-child
   "Child uses its own shorter deadline"
-  (let ((parent-deadline (+ (get-current-time) 10.0))
-        (child-deadline (+ (get-current-time) 0.1)))
+  (let ((parent-deadline (+ (get-current-time) 10))
+        (child-deadline (+ (get-current-time) 1/10)))
     (multiple-value-bind (parent parent-cancel)
         (with-deadline (background) parent-deadline)
       (declare (ignore parent-cancel))
@@ -232,16 +261,19 @@
 
 (test with-timeout-context-macro
   "with-timeout-context macro works"
+  ;; Cancellation is cooperative: the body has to check.
   (signals deadline-exceeded
     (with-timeout-context (ctx 0.1)
-      (sleep 0.2))))
+      (sleep 0.2)
+      (check-cancellation))))
 
 (test with-deadline-context-macro
   "with-deadline-context macro works"
   (signals deadline-exceeded
-    (let ((deadline-time (+ (get-current-time) 0.1)))
+    (let ((deadline-time (+ (get-current-time) 1/10)))
       (with-deadline-context (ctx deadline-time)
-        (sleep 0.2)))))
+        (sleep 0.2)
+        (check-cancellation)))))
 
 ;;; Stress tests
 
