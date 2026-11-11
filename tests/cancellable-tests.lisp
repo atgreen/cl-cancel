@@ -393,3 +393,80 @@ one could not be put in the timer's heap, whose entries hold rationals."
         (let ((*current-cancel-context* ctx2))
           (is (eq (ensure-cancellable) ctx2))
           (is (eq (ensure-cancellable nil) ctx2)))))))
+
+
+(test timeout-duration-retains-precision-at-epoch-scale
+  "Float durations are normalized before epoch addition, not after rounding."
+  (dolist (duration '(0.1 1.0 0.1d0 1/10 1))
+    (let ((before (get-current-time)))
+      (multiple-value-bind (ctx cancel) (with-timeout (background) duration)
+        (unwind-protect
+             (let ((after (get-current-time)))
+               (is (rationalp (deadline ctx)))
+               (is (<= (+ before (rational duration)) (deadline ctx)
+                       (+ after (rational duration)))))
+          (funcall cancel))))))
+
+(test absolute-double-float-deadlines-normalize-without-changing-the-value
+  (let ((requested (coerce (+ (get-current-time) 60) 'double-float)))
+    (multiple-value-bind (ctx cancel) (with-deadline (background) requested)
+      (unwind-protect
+           (progn (is (rationalp (deadline ctx))) (is (= requested (deadline ctx))))
+        (funcall cancel)))))
+
+(test deadline-scopes-preserve-values-and-clean-up-nonlocal-exits
+  (is (equal '(1 2) (multiple-value-list
+                     (with-timeout-context (ctx 60) (values 1 2)))))
+  (is (equal '(3 4) (multiple-value-list
+                     (with-deadline-context (ctx (+ (get-current-time) 60)) (values 3 4)))))
+  (let ((captured nil))
+    (is (eq :escaped
+            (catch 'scope-exit
+              (with-timeout-context (ctx 60)
+                (setf captured ctx)
+                (throw 'scope-exit :escaped)))))
+    (is (cancelled-p captured))
+    (is (null (cl-cancel::cancellable-timer-entry captured)))))
+
+(test deadline-scopes-preserve-body-errors
+  (let ((original (make-condition 'simple-error :format-control "body failed")))
+    (is (eq original
+            (handler-case
+                (with-timeout-context (ctx 60)
+                  (cancel ctx (make-condition 'deadline-exceeded :cancellable ctx))
+                  (error original))
+              (error (condition) condition))))))
+
+(test expired-deadline-scope-does-not-enter-body
+  (let ((entered nil))
+    (signals deadline-exceeded
+      (with-deadline-context (ctx (1- (get-current-time)))
+        (setf entered t)))
+    (is (null entered))))
+
+(test deadline-children-are-initialized-before-parent-publication
+  (multiple-value-bind (parent cancel-parent) (with-cancel (background))
+    (let ((creator nil) (valid t) (seen 0))
+      (labels ((observe ()
+                 (bt2:with-lock-held ((cl-cancel::cancellable-lock parent))
+                   (let ((children (cl-cancel::cancellable-children parent)))
+                     (setf seen (max seen (length children))
+                           valid (and valid
+                                      (every (lambda (child)
+                                               (and (typep child 'deadline-context)
+                                                    (slot-boundp child 'cl-cancel::deadline)
+                                                    (slot-boundp child 'cl-cancel::timer-entry)))
+                                             children)))))))
+        (unwind-protect
+             (progn
+               (setf creator
+                     (bt2:make-thread
+                      (lambda () (dotimes (i 1000) (with-timeout parent 60)))))
+               (loop repeat 1000 while (bt2:thread-alive-p creator)
+                     do (observe) (sleep 0))
+               (bt2:join-thread creator)
+               (observe)
+               (is (eq t valid))
+               (is (= 1000 seen)))
+          (when creator (bt2:join-thread creator))
+          (funcall cancel-parent))))))

@@ -198,14 +198,9 @@ top-level cancellable for incoming requests."
 
 ;;; Cancellable creation functions
 
-(defun with-cancel (parent)
-  "Returns a copy of parent with a new Done channel. The returned cancellable's
-Done channel is closed when the returned cancel function is called or when
-the parent cancellable's Done channel is closed, whichever happens first.
-
-Returns (values cancellable cancel-function)
-The cancel function is a lambda accepting an optional error parameter."
-  (let* ((ctx (make-instance 'cancellable-context :parent parent))
+(defun make-child-cancellable (parent class &rest initargs)
+  "Construct all child slots before publishing the child to its parent."
+  (let* ((ctx (apply #'make-instance class :parent parent initargs))
          (cancel-func (lambda (&optional (error (make-condition 'cancelled :cancellable ctx)))
                         (cancel ctx error))))
     ;; Register with parent
@@ -230,6 +225,15 @@ The cancel function is a lambda accepting an optional error parameter."
                      (make-condition 'cancelled :cancellable parent))))
 
     (values ctx cancel-func)))
+
+(defun with-cancel (parent)
+  "Returns a copy of parent with a new Done channel. The returned cancellable's
+Done channel is closed when the returned cancel function is called or when
+the parent cancellable's Done channel is closed, whichever happens first.
+
+Returns (values cancellable cancel-function)
+The cancel function is a lambda accepting an optional error parameter."
+  (make-child-cancellable parent 'cancellable-context))
 
 ;;; Convenience macros
 

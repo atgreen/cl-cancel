@@ -187,6 +187,20 @@ When the context times out or is cancelled:
           (error e))))))
 ```
 
+### Deadline precision and scope exit
+
+Relative timeout durations may be integers, rationals, or floats; `with-timeout`
+normalizes the duration before adding it to the epoch timestamp. When constructing
+an absolute deadline yourself, use `(+ (get-current-time) 1/10)` for 100 ms.
+Adding a single float such as `0.1` directly to epoch time loses precision before
+`with-deadline` receives the result.
+
+`with-timeout-context` and `with-deadline-context` check cancellation before the
+body and after a normal return. They preserve multiple return values and always
+release the context on exit. They are cooperative: a blocking body must use
+cancellation-aware operations or call `check-cancellation` to stop earlier. A body
+error or nonlocal exit is preserved while cleanup runs.
+
 ## API Reference
 
 ### Core Types
