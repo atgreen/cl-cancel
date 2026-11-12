@@ -470,3 +470,64 @@ one could not be put in the timer's heap, whose entries hold rationals."
                (is (= 1000 seen)))
           (when creator (bt2:join-thread creator))
           (funcall cancel-parent))))))
+
+;;; close-stream-on-cancel tests (regression for cl-cancel-g6p)
+
+(defun live-stream-monitors ()
+  "Count the currently-alive cancel-stream-monitor threads."
+  (count "cancel-stream-monitor" (bt2:all-threads)
+         :key #'bt2:thread-name :test #'equal))
+
+(defun wait-for (predicate &optional (seconds 3.0))
+  "Poll PREDICATE until it returns true or SECONDS elapse; return its last value."
+  (let ((deadline (+ (get-internal-real-time)
+                     (* seconds internal-time-units-per-second))))
+    (loop for val = (funcall predicate)
+          when val return val
+          when (> (get-internal-real-time) deadline) return val
+          do (sleep 0.005))))
+
+(test close-stream-on-cancel-reaps-monitor
+  "Normal I/O completion wakes and joins the monitor thread - no hang, no leak"
+  (multiple-value-bind (ctx cancel)
+      (with-cancel (background))
+    (let* ((baseline (live-stream-monitors))
+           (stream (make-string-output-stream))
+           (cleanup (close-stream-on-cancel stream ctx)))
+      ;; The monitor thread is running while the I/O is in flight.
+      (is (wait-for (lambda () (> (live-stream-monitors) baseline))))
+      ;; Run cleanup in its own thread so a regression (the monitor parks on a
+      ;; semaphore that normal completion never signals) surfaces as a clean
+      ;; test failure instead of hanging the whole suite.
+      (let ((runner (bt2:make-thread (lambda () (funcall cleanup))
+                                     :name "cleanup-runner")))
+        (is (wait-for (lambda () (not (bt2:thread-alive-p runner)))))
+        (when (not (bt2:thread-alive-p runner))
+          (bt2:join-thread runner)))
+      ;; Monitor must be reaped, not leaked ...
+      (is (= baseline (live-stream-monitors)))
+      ;; ... and a never-cancelled stream must be left open.
+      (is (open-stream-p stream))
+      (funcall cancel))))
+
+(test close-stream-on-cancel-closes-on-cancel
+  "Cancelling the context forcibly closes the monitored stream"
+  (multiple-value-bind (ctx cancel)
+      (with-cancel (background))
+    (let* ((stream (make-string-output-stream))
+           (cleanup (close-stream-on-cancel stream ctx)))
+      (unwind-protect
+           (progn
+             (is (open-stream-p stream))
+             (funcall cancel)
+             (is (wait-for (lambda () (not (open-stream-p stream))))))
+        (funcall cleanup)))))
+
+(test close-stream-on-cancel-skips-non-cancellable
+  "A background (non-cancellable) context spawns no monitor thread"
+  (let* ((baseline (live-stream-monitors))
+         (stream (make-string-output-stream))
+         (cleanup (close-stream-on-cancel stream (background))))
+    (is (= baseline (live-stream-monitors)))
+    (finishes (funcall cleanup))
+    (is (open-stream-p stream))))

@@ -62,23 +62,39 @@
   ;; Only monitor if we have a cancellable context
   (if (typep cancellable 'cancellable-context)
       (let* ((done nil)
-             (done-lock (bordeaux-threads:make-lock))
+             (done-lock (bt2:make-lock :name "cancel-stream-monitor"))
              (monitor-thread
-               (bordeaux-threads:make-thread
+               (bt2:make-thread
                 (lambda ()
-                  ;; Wait until cancellable is done (no polling!)
-                  (let ((err (wait-until-done cancellable)))
-                    ;; Only close stream if cancellable actually became done (err is non-NIL)
-                    (when err
-                      (bordeaux-threads:with-lock-held (done-lock)
-                        (unless done
-                          ;; Cancellable was cancelled - abort the stream to interrupt blocked I/O
-                          (ignore-errors (close stream :abort t)))))))
+                  ;; Park until the cancellable is done (no polling!).  When the
+                  ;; I/O completes without cancellation the cancellable is never
+                  ;; signalled, so the cleanup function wakes us via
+                  ;; INTERRUPT-THREAD, which throws out to this tag.
+                  (catch 'stop-monitor
+                    (let ((err (wait-until-done cancellable)))
+                      ;; Only close stream if cancellable actually became done (err is non-NIL)
+                      (when err
+                        (bt2:with-lock-held (done-lock)
+                          (unless done
+                            ;; Cancellable was cancelled - abort the stream to interrupt blocked I/O
+                            (ignore-errors (close stream :abort t))))))))
                 :name "cancel-stream-monitor")))
         ;; Return cleanup function
         (lambda ()
-          (bordeaux-threads:with-lock-held (done-lock)
+          ;; Claim the done flag first: taking the lock here guarantees the
+          ;; monitor is either not yet closing (it will see DONE and skip) or
+          ;; has finished closing, so the interrupt below never aborts a
+          ;; close in progress.
+          (bt2:with-lock-held (done-lock)
             (setf done t))
-          (bordeaux-threads:join-thread monitor-thread :timeout 0.1)))
+          ;; Wake the monitor if it is still parked waiting for cancellation,
+          ;; then reap it so the thread is never leaked.  The throw is wrapped
+          ;; in IGNORE-ERRORS to tolerate the race where the monitor has just
+          ;; left the CATCH extent (tag already gone).
+          (when (bt2:thread-alive-p monitor-thread)
+            (ignore-errors
+             (bt2:interrupt-thread monitor-thread
+                                   (lambda () (ignore-errors (throw 'stop-monitor nil))))))
+          (ignore-errors (bt2:join-thread monitor-thread))))
       ;; No monitor needed for non-cancellable contexts
       (lambda () nil)))
