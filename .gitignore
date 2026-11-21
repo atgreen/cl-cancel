@@ -5,3 +5,7 @@
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# ocicl dependency cache (never ship it in the package)
+ocicl/
+ocicl.csv
