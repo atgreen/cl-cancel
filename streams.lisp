@@ -71,13 +71,20 @@
                   ;; signalled, so the cleanup function wakes us via
                   ;; INTERRUPT-THREAD, which throws out to this tag.
                   (catch 'stop-monitor
-                    (let ((err (wait-until-done cancellable)))
-                      ;; Only close stream if cancellable actually became done (err is non-NIL)
-                      (when err
-                        (bt2:with-lock-held (done-lock)
-                          (unless done
-                            ;; Cancellable was cancelled - abort the stream to interrupt blocked I/O
-                            (ignore-errors (close stream :abort t))))))))
+                    ;; The cleanup function may already have run: I/O that
+                    ;; completes at once is over before this thread reaches the
+                    ;; CATCH.  Its interrupt then found no tag to throw to, and
+                    ;; nothing else will wake this thread before the deadline,
+                    ;; while the cleanup function waits to join it.  DONE is set
+                    ;; before the interrupt is sent, so it tells us.
+                    (unless (bt2:with-lock-held (done-lock) done)
+                      (let ((err (wait-until-done cancellable)))
+                        ;; Only close stream if cancellable actually became done (err is non-NIL)
+                        (when err
+                          (bt2:with-lock-held (done-lock)
+                            (unless done
+                              ;; Cancellable was cancelled - abort the stream to interrupt blocked I/O
+                              (ignore-errors (close stream :abort t)))))))))
                 :name "cancel-stream-monitor")))
         ;; Return cleanup function
         (lambda ()
@@ -89,8 +96,9 @@
             (setf done t))
           ;; Wake the monitor if it is still parked waiting for cancellation,
           ;; then reap it so the thread is never leaked.  The throw is wrapped
-          ;; in IGNORE-ERRORS to tolerate the race where the monitor has just
-          ;; left the CATCH extent (tag already gone).
+          ;; in IGNORE-ERRORS to tolerate the monitor being outside the CATCH
+          ;; extent: it has just left it (tag already gone), or it has not
+          ;; reached it yet, in which case it sees DONE when it does.
           (when (bt2:thread-alive-p monitor-thread)
             (ignore-errors
              (bt2:interrupt-thread monitor-thread

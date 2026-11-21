@@ -487,6 +487,36 @@ one could not be put in the timer's heap, whose entries hold rationals."
           when (> (get-internal-real-time) deadline) return val
           do (sleep 0.005))))
 
+(test close-stream-on-cancel-reaps-a-monitor-that-has-not-started
+  "Cleanup that runs before the monitor thread has begun still stops it at once.
+I/O that completes at once is the usual case for a local request. The monitor
+used to park until the deadline then, with the cleanup function waiting for it."
+  (let* ((baseline (live-stream-monitors))
+         (rounds 20000)
+         (completed 0)
+         (cancels nil)
+         ;; The rounds run in a thread of their own, so that a monitor that
+         ;; parks fails this test and does not hang the suite.
+         (worker (bt2:make-thread
+                  (lambda ()
+                    (dotimes (i rounds)
+                      (multiple-value-bind (ctx cancel) (with-timeout (background) 120)
+                        (push cancel cancels)
+                        ;; Nothing happens between starting the monitor and stopping it.
+                        (funcall (close-stream-on-cancel (make-string-output-stream) ctx))
+                        (funcall cancel)
+                        (incf completed))))
+                  :name "immediate-cleanup")))
+    (unwind-protect
+         (progn
+           (is (wait-for (lambda () (not (bt2:thread-alive-p worker))) 60.0)
+               "~D of ~D cleanups returned; the next one is waiting for its monitor" completed rounds)
+           (is (= rounds completed)))
+      ;; Release a monitor that parked, so that the worker can end.
+      (mapc #'funcall cancels)
+      (wait-for (lambda () (not (bt2:thread-alive-p worker))) 10.0))
+    (is (wait-for (lambda () (= baseline (live-stream-monitors)))))))
+
 (test close-stream-on-cancel-reaps-monitor
   "Normal I/O completion wakes and joins the monitor thread - no hang, no leak"
   (multiple-value-bind (ctx cancel)
