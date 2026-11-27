@@ -394,6 +394,15 @@ one could not be put in the timer's heap, whose entries hold rationals."
           (is (eq (ensure-cancellable) ctx2))
           (is (eq (ensure-cancellable nil) ctx2)))))))
 
+(test current-time-advances-by-the-fraction-slept
+  "get-current-time measures a 0.2 second sleep as a fraction of a second.
+Reading 100 ns units as nanoseconds makes the clock move in whole-second
+steps, so the same sleep measures under 0.01 or over 0.99 seconds."
+  (let* ((start (get-current-time))
+         (elapsed (progn (sleep 0.2) (- (get-current-time) start))))
+    (is (rationalp elapsed))
+    (is (<= 1/10 elapsed 9/10)
+        "0.2 s sleep measured as ~,4F s" (float elapsed 1d0))))
 
 (test timeout-duration-retains-precision-at-epoch-scale
   "Float durations are normalized before epoch addition, not after rounding."
