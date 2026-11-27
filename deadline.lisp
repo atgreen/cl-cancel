@@ -9,15 +9,17 @@
 
 (defun get-current-time ()
   "Get current time as fractional seconds since epoch.
-   Returns a rational number with nanosecond precision.
+   Returns a rational number of seconds whose fractional part is in
+   the units of PRECISE-TIME-UNITS-PER-SECOND.
 
    Offset it by a rational or an integer, such as (+ (get-current-time) 1/10).
    Adding a float makes a float, and a single-float near today's universal
    time (about 4e9) is only accurate to 256 seconds, so
    (+ (get-current-time) 0.1) can name a time minutes away."
-  (multiple-value-bind (universal-time nanoseconds)
+  (multiple-value-bind (universal-time subseconds)
       (org.shirakumo.precise-time:get-precise-time)
-    (+ universal-time (/ nanoseconds 1000000000))))
+    (+ universal-time
+       (/ subseconds org.shirakumo.precise-time:precise-time-units-per-second))))
 
 (defun sleep-fractional (seconds)
   "Sleep for SECONDS, which can be fractional.
